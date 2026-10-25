@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+service.json
+credentials.json
+auth.json
+*.log
+node_modules/
+__pycache__/
+*.bak*
+.venv/
+scripts/personal-patterns.txt
