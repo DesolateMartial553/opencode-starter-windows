@@ -107,15 +107,18 @@ function Ensure-Winget-Package([string]$cmd, [string]$id, [string]$label) {
         return
     }
     Do-Step "installing $label with winget" {
-        try {
-            winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements --source winget
-        } catch {
-            # Fallback without explicit source if winget source fails
-            try {
-                winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
-            } catch { }
+        for ($i = 1; $i -le 3; $i++) {
+            try { & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements --source winget } catch { }
+            Update-SessionPath
+            if (Test-Cmd $cmd) { break }
+            try { & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements } catch { }
+            Update-SessionPath
+            if (Test-Cmd $cmd) { break }
+            if ($i -lt 3) {
+                Warn "$label download/install attempt $i did not complete. Retrying in 3 seconds..."
+                Start-Sleep -Seconds 3
+            }
         }
-        Update-SessionPath
     }
     if (-not $DryRun) {
         if (Test-Cmd $cmd) { Ok "$label installed" }
