@@ -1,0 +1,117 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The one-line install is `irm ... | iex`, so a single syntax error means
+  # nobody can install the kit. These scripts are only ever run on Windows,
+  # so check them there.
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse-check every PowerShell script
+        shell: pwsh
+        run: |
+          $failed = 0
+          $files = Get-ChildItem -Recurse -Filter *.ps1 |
+                   Where-Object { $_.FullName -notmatch '\\node_modules\\' }
+          foreach ($f in $files) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = 1
+              foreach ($e in $errors) {
+                Write-Host "::error file=$($f.Name),line=$($e.Extent.StartLineNumber)::$($e.Message)"
+              }
+            } else {
+              Write-Host "ok  $($f.Name)"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Installer dry run (changes nothing)
+        shell: pwsh
+        run: ./install.ps1 -DryRun -NoPrompt -SkipYouTube -SkipHiggsfield
+
+      # `powershell` is Windows PowerShell 5.1, which is what the one-liner usually
+      # lands in. It has older syntax rules than pwsh, so it gets its own run.
+      - name: Installer dry run under Windows PowerShell 5.1
+        shell: powershell
+        run: ./install.ps1 -DryRun -NoPrompt -SkipYouTube -SkipHiggsfield
+
+      - name: Updater dry run (changes nothing)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.config\opencode" | Out-Null
+          ./update.ps1 -DryRun -Source .
+
+      - name: Per-user scripts must not prompt when -NoPrompt is given
+        shell: pwsh
+        run: |
+          # Guards against a future switch being added without wiring it to -NoPrompt.
+          $text = Get-Content ./install.ps1 -Raw
+          if ($text -match '(?m)Read-Host' -and $text -notmatch '\$NoPrompt') {
+            Write-Host '::error::install.ps1 calls Read-Host but never checks -NoPrompt'
+            exit 1
+          }
+
+  # Secrets and personal details must never reach this public repo.
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secret and personal-detail scan
+        run: bash scripts/sanitize-check.sh
+
+      - name: Config JSON is valid
+        run: |
+          set -e
+          for f in $(find . -name '*.json' -not -path './node_modules/*' -not -path './.git/*'); do
+            python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f"
+            echo "ok  $f"
+          done
+
+      - name: Kit structure is intact
+        run: |
+          set -e
+          fail=0
+          for d in config/skills/*/; do
+            [ -f "$d/SKILL.md" ] || { echo "::error::missing SKILL.md in $d"; fail=1; }
+          done
+          for f in config/commands/*.md config/agents/*.md; do
+            head -1 "$f" | grep -q '^---$' || { echo "::error::$f has no frontmatter block"; fail=1; }
+          done
+          echo "skills:   $(ls -d config/skills/*/ | wc -l)"
+          echo "agents:   $(ls config/agents/*.md | wc -l)"
+          echo "commands: $(ls config/commands/*.md | wc -l)"
+          exit $fail
+
+      # An unquoted colon in a description breaks the YAML, and the command silently
+      # fails to load. Caught here rather than by a confused beginner.
+      - name: Frontmatter is valid YAML
+        run: |
+          python3 -m pip install --quiet pyyaml || true
+          python3 - <<'PY'
+          import glob, sys, yaml
+          files = sorted(glob.glob('config/commands/*.md') + glob.glob('config/agents/*.md') + glob.glob('config/skills/*/SKILL.md'))
+          bad = 0
+          for f in files:
+              text = open(f, encoding='utf-8').read()
+              if not text.startswith('---\n'):
+                  print(f'::error file={f}::no frontmatter'); bad += 1; continue
+              try:
+                  meta = yaml.safe_load(text[4:text.find('\n---', 4)])
+              except Exception as e:
+                  print(f'::error file={f}::invalid YAML frontmatter: {e}'); bad += 1; continue
+              if not isinstance(meta, dict) or not (meta.get('description') or meta.get('name')):
+                  print(f'::error file={f}::frontmatter has no name or description'); bad += 1
+          print(f'checked {len(files)} files, {bad} problem(s)')
+          sys.exit(1 if bad else 0)
+          PY
