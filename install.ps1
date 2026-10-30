@@ -108,8 +108,13 @@ function Ensure-Winget-Package([string]$cmd, [string]$id, [string]$label) {
     }
     Do-Step "installing $label with winget" {
         try {
-            winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
-        } catch { }
+            winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements --source winget
+        } catch {
+            # Fallback without explicit source if winget source fails
+            try {
+                winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
+            } catch { }
+        }
         Update-SessionPath
     }
     if (-not $DryRun) {
