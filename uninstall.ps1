@@ -7,7 +7,8 @@
 #>
 param([switch]$DryRun)
 $ErrorActionPreference = 'Stop'
-$ConfigDir = Join-Path $env:USERPROFILE '.config\opencode'
+$HomeDir = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+$ConfigDir = Join-Path $HomeDir '.config\opencode'
 $parent = Split-Path $ConfigDir -Parent
 $backup = Get-ChildItem $parent -Directory -Filter 'opencode.backup-*' -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1

@@ -50,7 +50,12 @@ Only clip content you have permission to use.
 - Never paste keys into chats or files in a project; use environment variables.
 
 ## 8. If something goes wrong
+- **Red error text while installing**: run the one-line installer again; an early copy had a bug that
+  stopped it dead. Nothing gets half-installed.
 - **"running scripts is disabled"**: run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then try again.
 - **`opencode` not found**: close and reopen PowerShell (the PATH updates only in new windows).
 - **Mistake in your project**: ask OpenCode to undo it, or use Git (`git status`, `git restore <file>`).
 - **Start over with the kit config**: run `uninstall.ps1` (restores your old config), or re-run the installer.
+
+There is a full **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** with the exact messages Windows gives and what
+to do about each one.

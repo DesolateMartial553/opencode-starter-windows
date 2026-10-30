@@ -1,6 +1,10 @@
+---
+description: Run formatter, lint and type checks on a project (or a path), then list what needs fixing
+---
+
 # Quality Gate Command
 
-Run the ECC quality pipeline on demand for a file or project scope.
+Run the full quality pipeline on demand for a file or project scope.
 
 ## Usage
 

@@ -25,7 +25,16 @@ cd $env:USERPROFILE\my-first-project
 opencode
 ```
 
-New to all this? Read **[GETTING-STARTED.md](GETTING-STARTED.md)**.
+New to all this? Read **[GETTING-STARTED.md](GETTING-STARTED.md)**. Problems? See
+**[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**.
+
+To update the kit later:
+
+```powershell
+irm https://raw.githubusercontent.com/DesolateMartial553/opencode-starter-windows/main/update.ps1 | iex
+```
+
+It backs up your config first and keeps your own `opencode.json` and `AGENTS.md` if you edited them.
 
 ## What gets installed
 
@@ -39,7 +48,8 @@ New to all this? Read **[GETTING-STARTED.md](GETTING-STARTED.md)**.
 | Higgsfield CLI + 8 skills | AI image/video generation (**paid credits**, you log in with your own account) | `npm install -g @higgsfield/cli` |
 
 Any existing OpenCode config is **backed up** (`opencode.backup-<date>`), never overwritten. To undo, run
-`uninstall.ps1`.
+`uninstall.ps1`. The installer is safe to run more than once, retries downloads three times if your
+connection drops, and checks that OpenCode actually starts before it says it worked.
 
 ## Models and keys
 
@@ -64,3 +74,13 @@ next one in `opencode.json`.
 ## For the maintainer
 
 `scripts/sanitize-check.sh` scans the tree for secrets and personal references; run it before every push.
+
+`.github/workflows/check.yml` runs on every push: it parse-checks every PowerShell file on Windows (a
+syntax error in `install.ps1` breaks the one-line install completely), does a `-DryRun` of the installer,
+validates the config JSON, checks skill/agent/command structure, and runs the sanitize scan.
+
+Check a script locally before pushing, either on Windows or with PowerShell on Linux/macOS:
+
+```powershell
+[System.Management.Automation.Language.Parser]::ParseFile($PWD/install.ps1, [ref]$null, [ref]$errors)
+```

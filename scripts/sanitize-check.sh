@@ -12,8 +12,8 @@ if grep -rnIE --exclude-dir=.git --exclude=sanitize-check.sh --exclude=personal-
   echo "FAIL: personal/secret pattern found (above)"; fail=1
 fi
 
-# 2) the repo owner name is allowed only in the docs and installers
-if grep -rIl --exclude-dir=.git "DesolateMartial553" . | grep -vE '^\./(README\.md|GETTING-STARTED\.md|install\.ps1|uninstall\.ps1|scripts/sanitize-check\.sh)$'; then
+# 2) the repo owner name is allowed only in the docs and the installer scripts
+if grep -rIl --exclude-dir=.git "DesolateMartial553" . | grep -vE '^\./(README\.md|GETTING-STARTED\.md|TROUBLESHOOTING\.md|[A-Za-z0-9_-]+\.ps1|scripts/sanitize-check\.sh)$'; then
   echo "FAIL: GitHub username appears outside README/installers"; fail=1
 fi
 
