@@ -100,29 +100,51 @@ function Get-OpenCodeVersion {
     return $null
 }
 
+# winget exit codes that mean "there is already a copy on this PC", so there is nothing
+# left to install. Taken from Microsoft's winget return-code list
+# (https://github.com/microsoft/winget-cli/blob/master/doc/windows/package-manager/winget/returnCodes.md):
+#   0x8A150061 / -1978335135  APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED
+#   0x8A15010D / -1978334963  APPINSTALLER_CLI_ERROR_INSTALL_ALREADY_INSTALLED
+#   0x8A15002B / -1978335189  APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (no newer version)
+$script:WingetAlreadyInstalled = @(-1978335135, -1978334963, -1978335189)
+
 function Ensure-Winget-Package([string]$cmd, [string]$id, [string]$label) {
     if (Test-Cmd $cmd) { Ok "$label already installed"; return }
     if (-not (Test-Cmd 'winget')) {
         Warn "$label is missing and winget is not available. Install it by hand, then run this again."
         return
     }
+    # winget is a native command: it never throws, so its exit code is the only real
+    # signal. A hashtable (not a plain variable) is used so the Do-Step scriptblock can
+    # record the result in the enclosing scope.
+    $result = @{ Ok = $false; Code = $null }
     Do-Step "installing $label with winget" {
         for ($i = 1; $i -le 3; $i++) {
-            try { & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements --source winget } catch { }
+            & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements --source winget | Out-Host
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+                # One more go per attempt, without pinning the source: a stale winget
+                # source is the usual reason the first call fails.
+                Note "winget returned $code with --source winget; trying once more without it"
+                & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements | Out-Host
+                $code = $LASTEXITCODE
+            }
+            $result.Code = $code
             Update-SessionPath
-            if (Test-Cmd $cmd) { break }
-            try { & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements } catch { }
-            Update-SessionPath
-            if (Test-Cmd $cmd) { break }
+            if ($code -eq 0) { $result.Ok = $true; break }
+            if ($script:WingetAlreadyInstalled -contains $code) { $result.Ok = $true; break }
+            # PATH can lag behind a successful install, so a working command counts too.
+            if (Test-Cmd $cmd) { $result.Ok = $true; break }
             if ($i -lt 3) {
-                Warn "$label download/install attempt $i did not complete. Retrying in 3 seconds..."
+                Warn "$label install attempt $i failed (winget exit code $code). Retrying in 3 seconds..."
                 Start-Sleep -Seconds 3
             }
         }
     }
     if (-not $DryRun) {
         if (Test-Cmd $cmd) { Ok "$label installed" }
-        else { Warn "$label did not appear yet (often it only shows up in a new PowerShell window)" }
+        elseif ($result.Ok) { Warn "$label is installed but not on PATH yet; it will work in a new PowerShell window" }
+        else { Warn "$label did not appear yet (winget exit code $($result.Code); it often only shows up in a new PowerShell window)" }
     }
 }
 
