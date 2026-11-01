@@ -22,5 +22,9 @@ if find . -path ./.git -prune -o \( -name 'service.json' -o -name 'credentials.j
   echo "FAIL: forbidden file present"; fail=1
 fi
 
+# 4) every commit must use the GitHub noreply address
+bad=$(git log --format='%ae%n%ce' | sort -u | grep -v '@users.noreply.github.com$')
+if [ -n "$bad" ]; then echo "FAIL: non-noreply author/committer email in history:"; echo "$bad"; fail=1; fi
+
 [ $fail -eq 0 ] && echo "sanitize-check: clean"
 exit $fail
